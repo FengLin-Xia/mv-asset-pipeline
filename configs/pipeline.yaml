@@ -1,0 +1,42 @@
+project:
+  project_name: mv_case_pipeline
+  output_root: data/processed
+
+video:
+  target_fps: 25
+  target_height: 720
+  audio_sample_rate: 44100
+
+shot_detection:
+  method: pyscenedetect
+  pyscenedetect:
+    detector: content
+    threshold: 27.0
+    min_scene_len: 12
+  transnetv2:
+    enabled: false
+
+keyframe:
+  mode: start_middle_end
+  frames_per_shot: 3
+  avoid_black_frames: true
+  avoid_blur_frames: false
+
+music_structure:
+  enabled: true
+  method: songformer_wsl
+  songformer:
+    wsl_python: "/home/vip/miniconda3/envs/songformer/bin/python"
+    project_dir: "/home/vip/projects/SongFormer"
+    fail_policy: "warn_and_skip"   # warn_and_skip | raise
+
+caption:
+  enabled: true
+  method: api_vlm
+  frames_per_prompt: 3
+  language: zh
+
+schema:
+  output_format: json
+  include_confidence: true
+  include_source: true

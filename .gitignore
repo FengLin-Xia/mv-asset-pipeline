@@ -1,0 +1,31 @@
+# 环境与密钥
+.env
+*.sh.swp
+
+# 数据文件（视频、音频、图片、模型输出）
+data/raw/
+data/processed/
+demix/
+spec/
+
+# 安装包与构建日志
+Miniconda3-*.sh
+natten_build.log
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# 编辑器
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
