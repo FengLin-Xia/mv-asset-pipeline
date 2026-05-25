@@ -323,6 +323,14 @@ VLM_API_KEY not set
 
 编辑 `.env` 文件填入 API Key，或使用 `--skip-caption` 跳过。
 
+---
+
+## 致谢
+
+Step 4 音乐结构分析基于 [SongFormer](https://github.com/ASLP-lab/SongFormer) 实现，感谢 ASLP-lab 的开源工作。
+
+---
+
 ### 从某步继续时提示文件不存在
 
 前置步骤的输出文件缺失，需要先跑前面的步骤，或从 Step 1 重新开始。
