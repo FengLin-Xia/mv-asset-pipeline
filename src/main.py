@@ -21,6 +21,7 @@ from src.modules.source_separator import separate_vocals
 from src.modules.vocal_detector import detect_vocals
 from src.modules.schema_builder import build_schema
 from src.modules.reviewer_export import export_review_csv
+from src.modules.case_summary.case_summary_builder import build_case_summary
 
 
 def main():
@@ -31,6 +32,8 @@ def main():
     parser.add_argument("--debug", action="store_true", help="Debug 模式：只处理前 N 个 shot")
     parser.add_argument("--max-shots", type=int, default=10, help="Debug 模式的 shot 数量上限")
     parser.add_argument("--skip-demix", action="store_true", help="跳过音源分离（demucs 未安装或 vocals.wav 已存在时使用）")
+    parser.add_argument("--skip-summary", action="store_true", help="跳过 Step 7 案例级总结")
+    parser.add_argument("--no-llm", action="store_true", help="Step 7 只生成规则统计版，不调用 LLM")
     parser.add_argument("--skip-music", action="store_true", help="跳过音乐结构分析（SongFormer/WSL 未配置时使用）")
     parser.add_argument("--skip-caption", action="store_true", help="跳过 VLM caption")
     parser.add_argument("--start-from", type=int, default=1, help="从第几步开始（1-6）")
@@ -124,6 +127,26 @@ def main():
         print("\n── Step 6: 四层 JSON 结构化 ──")
         build_schema(mv_id=mv_id, output_root=output_root)
         export_review_csv(mv_id=mv_id, output_root=output_root)
+
+    if args.start_from <= 7:
+        if not args.skip_summary:
+            print("\n── Step 7: 案例级总结 ──")
+            cs_cfg = cfg.get("case_summary", {})
+            thresholds = cs_cfg.get("thresholds", {})
+            use_llm = (not args.no_llm) and cs_cfg.get("use_llm", True)
+            try:
+                build_case_summary(
+                    mv_id=mv_id,
+                    output_root=output_root,
+                    use_llm=use_llm,
+                    fast_threshold=thresholds.get("fast_cut_seconds", 1.0),
+                    medium_threshold=thresholds.get("medium_cut_seconds", 2.5),
+                    max_captions=cs_cfg.get("llm", {}).get("max_representative_captions", 30),
+                )
+            except Exception as e:
+                print(f"\n  [Step 7] 失败，跳过\n  原因: {e}")
+        else:
+            print("\n── Step 7: 跳过案例级总结 ──")
 
     print(f"\n{'='*50}")
     print(f"  全流程完成！输出目录：{output_root}/{mv_id}/")

@@ -40,3 +40,20 @@ schema:
   output_format: json
   include_confidence: true
   include_source: true
+
+case_summary:
+  enabled: true
+  use_llm: true
+  language: "zh"
+  output_markdown: true
+
+  thresholds:
+    fast_cut_seconds: 1.0
+    medium_cut_seconds: 2.5
+
+  llm:
+    api_key_env: "VLM_API_KEY"
+    api_base_env: "VLM_API_BASE"
+    model_env: "VLM_MODEL"
+    max_representative_captions: 30
+    max_section_items: 20

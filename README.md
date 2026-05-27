@@ -236,7 +236,9 @@ python scripts/run_stage6_build_json.py --mv-id MV_001
 | `--skip-demix` | 跳过 Step 1.5（demucs 未安装，或 vocals.wav 已存在时使用） |
 | `--skip-music` | 跳过 Step 4（SongFormer 未配置时使用） |
 | `--skip-caption` | 跳过 Step 5（无 API Key 时使用） |
-| `--start-from 5` | 从第 N 步继续，跳过已完成的步骤 |
+| `--skip-summary` | 跳过 Step 7 案例级总结 |
+| `--no-llm` | Step 7 只输出规则统计版，不调用 LLM |
+| `--start-from 7` | 从第 N 步继续，跳过已完成的步骤 |
 
 ### 示例
 
@@ -255,6 +257,9 @@ python src/main.py --input data/raw/MV_001.mp4 --mv-id MV_001 --skip-demix
 
 # 已有 Step 1-4 结果，只重跑 Caption 和 JSON 结构化
 python src/main.py --input data/raw/MV_001.mp4 --mv-id MV_001 --start-from 5
+
+# 只重新生成案例级总结（规则版）
+python src/main.py --input data/raw/MV_001.mp4 --mv-id MV_001 --start-from 7 --no-llm --overwrite
 ```
 
 ---
@@ -272,6 +277,7 @@ python src/main.py --input data/raw/MV_001.mp4 --mv-id MV_001 --start-from 5
 | Step 4 | 音乐结构分析（SongFormer） | `analysis/music_structure_raw.json` | WSL + GPU，`--skip-music` 可跳过 |
 | Step 5 | 视觉 Caption | `analysis/captions_raw.json` | 需 API Key，`--skip-caption` 可跳过 |
 | Step 6 | 四层 JSON 结构化 | `analysis/mv_case_asset.json`, `shot_review.csv` | 整合所有上游结果 |
+| Step 7 | 案例级总结 | `analysis/case_summary.json`, `analysis/case_summary.md` | `--skip-summary` 可跳过；`--no-llm` 仅规则版 |
 
 ---
 
@@ -296,7 +302,9 @@ data/processed/MV_001/
     ├── music_structure_raw.json      音乐段落结构（Step 4）
     ├── captions_raw.json             视觉 Caption（Step 5）
     ├── mv_case_asset.json            四层资产 JSON（Step 6）
-    └── shot_review.csv               人工复核表（Step 6）
+    ├── shot_review.csv               人工复核表（Step 6）
+    ├── case_summary.json             案例级总结（Step 7）
+    └── case_summary.md               案例级 Markdown 报告（Step 7）
 ```
 
 ### music_structure_raw.json 格式

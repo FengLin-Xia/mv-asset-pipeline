@@ -2,43 +2,43 @@
 
 ## 已完成
 
-- [x] 一、音视频节奏关联分析 — `sequence_table` 填充（镜头数 / 平均时长 / 剪辑频率）
-- [x] 二、关键帧颜色调性分析 — K-Means 聚色，输出主色 hex + 冷暖色温
-- [x] 三、人声段落标注 — htdemucs 接入 + librosa RMS，输出 `has_vocals` / `vocal_energy`
+- [x] 音视频节奏关联分析 — `sequence_table` 填充（镜头数 / 平均时长 / 剪辑频率）
+- [x] 关键帧颜色调性分析 — K-Means 聚色，输出主色 hex + 冷暖色温
+- [x] 人声段落标注 — htdemucs 接入 + librosa RMS，输出 `has_vocals` / `vocal_energy`
+- [x] BPM 自动计算 — librosa，Step 1 输出 `source/bpm.json`
+- [x] 关键帧黑帧/模糊帧过滤 — 拉普拉斯方差 + 亮度检测，自动偏移重试
+- [x] shot_review.csv 补充颜色和人声列
+- [x] 批量处理 — `src/batch_run.py`，自动扫描 `data/raw/`
+- [x] Step 7 案例级总结（规则版 + LLM 增强）— `case_summary.json` + `case_summary.md`
 
 ---
 
 ## 待做
 
-### ~~一、批量处理多个 MV~~ ✓
+### 一、Step 7 Phase 4：为检索做准备
 
-**目标**：支持一次性处理 `data/raw/` 下所有视频，自动分配 MV ID。
+**目标**：让 `case_summary` 可被案例库使用。
 
-**实现方式**：在 `main.py` 或新增 `batch_run.py`，遍历 raw 目录，循环调用现有 pipeline。
-
----
-
-### ~~二、关键帧模糊/黑帧过滤~~ ✓
-
-**目标**：抽帧时跳过纯黑帧和模糊帧，提高关键帧质量。
-
-**实现方式**：在 `keyframe_extractor.py` 中用 OpenCV 计算拉普拉斯方差（模糊检测）和亮度均值（黑帧检测），低于阈值则向后偏移重试。配置项 `avoid_blur_frames` 已在 `pipeline.yaml` 中预留，目前未生效。
+**实现方式**：
+1. 新增 `scripts/build_case_index.py`，将多个 `case_summary.json` 聚合为 `case_index.json`
+2. 保证 `search_tags` 枚举稳定（对齐 `label_taxonomy.yaml`）
+3. 为后续 embedding 检索保留字段（`one_sentence_summary` + `search_tags`）
 
 ---
 
-### ~~三、shot_review.csv 补充颜色和人声列~~ ✓
+### 二、TransNetV2 镜头检测接入
 
-**目标**：人工复核表目前只有 caption 相关字段，缺少颜色调性和人声标注列，不方便复核。
+**目标**：替代 PySceneDetect，提升镜头切分精度。
 
-**实现方式**：在 `reviewer_export.py` 中补充 `dominant_colors` / `color_temperature` / `has_vocals` / `vocal_energy` 列。
+**实现方式**：`configs/pipeline.yaml` 中 `transnetv2.enabled` 已预留，补充 `shot_detector_transnetv2.py` 并接入 `main.py`。
 
 ---
 
-### ~~四、BPM 接入~~ ✓
+### 三、shot_review 复核回写机制
 
-**目标**：`mv_table` 的 `bpm` 字段目前恒为 `null`，SongFormer 不输出 BPM，需单独计算。
+**目标**：人工复核 CSV 修改后，能回写到 `mv_case_asset.json`，形成闭环。
 
-**实现方式**：用 `librosa.beat.beat_track` 计算整首歌 BPM，在 Step 1.5 或 Step 4 后写入 `music_structure_raw.json`，schema_builder 直接读取。
+**实现方式**：新增 `scripts/import_review.py`，读取修改后的 `shot_review.csv`，更新对应 shot 的字段和 `needs_review` 状态。
 
 ---
 
@@ -46,9 +46,8 @@
 
 | 项目 | 依赖新环境 | 新依赖包 | 工作量 |
 |------|-----------|---------|--------|
-| 三、复核表补列 | 否 | 否 | 小 |
-| 四、BPM 接入 | 否 | 否（librosa 已有） | 小 |
-| 二、黑帧/模糊过滤 | 否 | 否（OpenCV 已有） | 小 |
-| 一、批量处理 | 否 | 否 | 中 |
+| 一、Case Index Builder | 否 | 否 | 小 |
+| 三、复核回写 | 否 | 否 | 小 |
+| 二、TransNetV2 | 否 | 需安装 | 中 |
 
-建议顺序：三 → 四 → 二 → 一
+建议顺序：一 → 三 → 二

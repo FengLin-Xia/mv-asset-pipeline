@@ -27,6 +27,7 @@ from src.modules.source_separator import separate_vocals
 from src.modules.vocal_detector import detect_vocals
 from src.modules.schema_builder import build_schema
 from src.modules.reviewer_export import export_review_csv
+from src.modules.case_summary.case_summary_builder import build_case_summary
 
 
 def run_one(mv_id: str, input_path: Path, cfg: dict, args: argparse.Namespace) -> None:
@@ -111,6 +112,26 @@ def run_one(mv_id: str, input_path: Path, cfg: dict, args: argparse.Namespace) -
         build_schema(mv_id=mv_id, output_root=output_root)
         export_review_csv(mv_id=mv_id, output_root=output_root)
 
+    if args.start_from <= 7:
+        if not args.skip_summary:
+            print("\n── Step 7: 案例级总结 ──")
+            cs_cfg = cfg.get("case_summary", {})
+            thresholds = cs_cfg.get("thresholds", {})
+            use_llm = (not args.no_llm) and cs_cfg.get("use_llm", True)
+            try:
+                build_case_summary(
+                    mv_id=mv_id,
+                    output_root=output_root,
+                    use_llm=use_llm,
+                    fast_threshold=thresholds.get("fast_cut_seconds", 1.0),
+                    medium_threshold=thresholds.get("medium_cut_seconds", 2.5),
+                    max_captions=cs_cfg.get("llm", {}).get("max_representative_captions", 30),
+                )
+            except Exception as e:
+                print(f"\n  [Step 7] 失败，跳过\n  原因: {e}")
+        else:
+            print("\n── Step 7: 跳过案例级总结 ──")
+
 
 def main():
     parser = argparse.ArgumentParser(description="MV 资产拆解 — 批量处理")
@@ -123,7 +144,9 @@ def main():
     parser.add_argument("--skip-demix", action="store_true")
     parser.add_argument("--skip-music", action="store_true")
     parser.add_argument("--skip-caption", action="store_true")
-    parser.add_argument("--start-from", type=int, default=1, help="从第几步开始（1-6）")
+    parser.add_argument("--skip-summary", action="store_true")
+    parser.add_argument("--no-llm", action="store_true", help="Step 7 只生成规则统计版")
+    parser.add_argument("--start-from", type=int, default=1, help="从第几步开始（1-7）")
     args = parser.parse_args()
 
     cfg = load_config(args.config)
