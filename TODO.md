@@ -1,71 +1,44 @@
-# Pipeline 深度扩展待办
+# Pipeline 待办
 
-## 一、音视频节奏关联分析
+## 已完成
 
-**目标**：计算每个音乐段落内的剪辑密度，量化音乐结构与视觉节奏的对应关系。
-
-**输入**：已有的 `scenes_raw.json`（镜头时间码）+ `music_structure_raw.json`（音乐段落）
-
-**输出**：在 Step 6 的 `sequence_table` 中填入每个音乐段落的视觉节奏统计：
-
-```json
-{
-  "segment_id": "SEQ_001",
-  "label": "chorus",
-  "start_seconds": 33.36,
-  "end_seconds": 51.84,
-  "shot_count": 8,
-  "avg_shot_duration": 2.31,
-  "cut_frequency": 0.43
-}
-```
-
-**实现方式**：纯数据计算，不需要新模型，在 `schema_builder.py` 中补充逻辑即可。
+- [x] 一、音视频节奏关联分析 — `sequence_table` 填充（镜头数 / 平均时长 / 剪辑频率）
+- [x] 二、关键帧颜色调性分析 — K-Means 聚色，输出主色 hex + 冷暖色温
+- [x] 三、人声段落标注 — htdemucs 接入 + librosa RMS，输出 `has_vocals` / `vocal_energy`
 
 ---
 
-## 二、关键帧颜色调性分析
+## 待做
 
-**目标**：提取每个关键帧的主色调，补充视觉风格维度。
+### ~~一、批量处理多个 MV~~ ✓
 
-**输入**：已有的关键帧图片（`frames/`）
+**目标**：支持一次性处理 `data/raw/` 下所有视频，自动分配 MV ID。
 
-**输出**：在 `keyframes_raw.json` 或 `mv_case_asset.json` 的关键帧条目中补充：
-
-```json
-{
-  "frame_id": "MV_001_S003_F002",
-  "dominant_colors": ["#1a2b4c", "#e8d5a3", "#ffffff"],
-  "color_temperature": "cool"
-}
-```
-
-**实现方式**：用 OpenCV 或 Pillow 做 K-Means 聚色，主环境已有这两个库，无需新依赖。新增 `src/modules/color_analyzer.py`，在 Step 3 后或 Step 6 前运行。
+**实现方式**：在 `main.py` 或新增 `batch_run.py`，遍历 raw 目录，循环调用现有 pipeline。
 
 ---
 
-## 三、人声段落标注
+### ~~二、关键帧模糊/黑帧过滤~~ ✓
 
-**目标**：检测每个时间段是否有人声，为 shot 增加 `has_vocals` 字段。
+**目标**：抽帧时跳过纯黑帧和模糊帧，提高关键帧质量。
 
-**输入**：htdemucs 已分离的 `vocals.wav`（现在在 `demix/` 目录，需接入 pipeline）
+**实现方式**：在 `keyframe_extractor.py` 中用 OpenCV 计算拉普拉斯方差（模糊检测）和亮度均值（黑帧检测），低于阈值则向后偏移重试。配置项 `avoid_blur_frames` 已在 `pipeline.yaml` 中预留，目前未生效。
 
-**输出**：在 shot 条目中补充：
+---
 
-```json
-{
-  "shot_id": "MV_001_S005",
-  "has_vocals": true,
-  "vocal_energy": 0.72
-}
-```
+### ~~三、shot_review.csv 补充颜色和人声列~~ ✓
 
-**实现方式**：
-1. 将 htdemucs 音源分离接入 Step 1（或新增 Step 1.5），输出 `source/vocals.wav`
-2. 新增 `src/modules/vocal_detector.py`，用 librosa 计算 RMS 能量判断有无人声
-3. 主环境已有 librosa，无需新依赖
+**目标**：人工复核表目前只有 caption 相关字段，缺少颜色调性和人声标注列，不方便复核。
 
-**前置工作**：需要先把 demix 流程从手动改为 pipeline 内自动调用。
+**实现方式**：在 `reviewer_export.py` 中补充 `dominant_colors` / `color_temperature` / `has_vocals` / `vocal_energy` 列。
+
+---
+
+### ~~四、BPM 接入~~ ✓
+
+**目标**：`mv_table` 的 `bpm` 字段目前恒为 `null`，SongFormer 不输出 BPM，需单独计算。
+
+**实现方式**：用 `librosa.beat.beat_track` 计算整首歌 BPM，在 Step 1.5 或 Step 4 后写入 `music_structure_raw.json`，schema_builder 直接读取。
 
 ---
 
@@ -73,8 +46,9 @@
 
 | 项目 | 依赖新环境 | 新依赖包 | 工作量 |
 |------|-----------|---------|--------|
-| 一、节奏关联 | 否 | 否 | 小 |
-| 二、颜色分析 | 否 | 否 | 小 |
-| 三、人声标注 | 否 | 否（librosa 已有） | 中（需先接入 demix） |
+| 三、复核表补列 | 否 | 否 | 小 |
+| 四、BPM 接入 | 否 | 否（librosa 已有） | 小 |
+| 二、黑帧/模糊过滤 | 否 | 否（OpenCV 已有） | 小 |
+| 一、批量处理 | 否 | 否 | 中 |
 
-建议顺序：一 → 二 → 三
+建议顺序：三 → 四 → 二 → 一

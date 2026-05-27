@@ -8,6 +8,9 @@ import subprocess
 import json
 from pathlib import Path
 
+import librosa
+import numpy as np
+
 from src.utils.ffmpeg_utils import run_ffmpeg, get_video_metadata
 from src.utils.json_utils import save_json
 from src.utils.path_utils import get_source_dir, ensure_dirs
@@ -48,6 +51,15 @@ def standardize(
     print(f"[Step 1] 提取 metadata -> {meta_out}")
     meta = get_video_metadata(video_out)
     save_json(meta, meta_out)
+
+    print(f"[Step 1] 计算 BPM -> {src_dir / 'bpm.json'}")
+    try:
+        y, sr = librosa.load(str(audio_out), sr=None, mono=True)
+        tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
+        bpm = round(float(np.atleast_1d(tempo)[0]), 2)
+    except Exception:
+        bpm = None
+    save_json({"bpm": bpm}, src_dir / "bpm.json")
 
     print(f"[Step 1] 完成")
     return {"video_path": str(video_out), "audio_path": str(audio_out), "metadata_path": str(meta_out)}

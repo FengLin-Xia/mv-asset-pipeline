@@ -2,7 +2,7 @@
 
 将 MV 视频自动拆解为结构化资产，供后续 AI 辅助创作使用。
 
-**输出内容**：镜头切分、关键帧、音乐段落结构、视觉 Caption、四层 JSON 资产表。
+**输出内容**：镜头切分、关键帧（含颜色调性）、音乐段落结构、视觉节奏关联、人声标注、视觉 Caption、四层 JSON 资产表。
 
 ---
 
@@ -15,6 +15,7 @@
 - [配置](#配置)
 - [WSL 侧运行机制与排查](#wsl-侧运行机制与排查)
 - [运行](#运行)
+- [Pipeline 步骤总览](#pipeline-步骤总览)
 - [输出结构](#输出结构)
 - [常见问题](#常见问题)
 
@@ -208,6 +209,14 @@ bash run_local_test.sh
 python src/main.py --input data/raw/MV_001.mp4 --mv-id MV_001
 ```
 
+### 批量处理（data/raw/ 下所有视频）
+
+```bash
+python src/batch_run.py
+```
+
+按文件名排序，自动分配 `MV_001`、`MV_002`... 支持所有 `--skip-*` 和 `--start-from` 参数。
+
 ### 分步运行
 
 ```bash
@@ -224,6 +233,7 @@ python scripts/run_stage6_build_json.py --mv-id MV_001
 | 参数 | 说明 |
 |------|------|
 | `--debug --max-shots 10` | 只处理前 N 个镜头，用于快速验证 |
+| `--skip-demix` | 跳过 Step 1.5（demucs 未安装，或 vocals.wav 已存在时使用） |
 | `--skip-music` | 跳过 Step 4（SongFormer 未配置时使用） |
 | `--skip-caption` | 跳过 Step 5（无 API Key 时使用） |
 | `--start-from 5` | 从第 N 步继续，跳过已完成的步骤 |
@@ -231,15 +241,37 @@ python scripts/run_stage6_build_json.py --mv-id MV_001
 ### 示例
 
 ```bash
+# 批量处理所有视频，跳过 GPU 和 API
+python src/batch_run.py --skip-demix --skip-music --skip-caption
+
 # 快速验证前 3 步（不需要 GPU 也不需要 API Key）
-python src/main.py --input data/raw/MV_001.mp4 --mv-id MV_001 --skip-music --skip-caption --debug
+python src/main.py --input data/raw/MV_001.mp4 --mv-id MV_001 --skip-demix --skip-music --skip-caption --debug
 
 # 跳过 Caption，只跑到 Step 4
 python src/main.py --input data/raw/MV_001.mp4 --mv-id MV_001 --skip-caption
 
+# demucs 未安装，跳过音源分离和人声标注
+python src/main.py --input data/raw/MV_001.mp4 --mv-id MV_001 --skip-demix
+
 # 已有 Step 1-4 结果，只重跑 Caption 和 JSON 结构化
 python src/main.py --input data/raw/MV_001.mp4 --mv-id MV_001 --start-from 5
 ```
+
+---
+
+## Pipeline 步骤总览
+
+| 步骤 | 名称 | 输出 | 备注 |
+|------|------|------|------|
+| Step 1 | 视频标准化 + BPM 计算 | `source/video.mp4`, `source/audio.wav`, `source/bpm.json` | |
+| Step 1.5 | 音源分离（htdemucs） | `source/vocals.wav` | `--skip-demix` 可跳过 |
+| Step 2 | 镜头切分 | `analysis/scenes_raw.json` | |
+| Step 2.5 | 人声标注 | `analysis/vocal_annotation_raw.json` | 依赖 Step 1.5 |
+| Step 3 | 关键帧抽取（含黑帧/模糊帧过滤） | `frames/*.jpg`, `analysis/keyframes_raw.json` | 过滤开关见 `pipeline.yaml` |
+| Step 3.5 | 颜色调性分析 | `keyframes_raw.json`（原地更新） | 无新依赖 |
+| Step 4 | 音乐结构分析（SongFormer） | `analysis/music_structure_raw.json` | WSL + GPU，`--skip-music` 可跳过 |
+| Step 5 | 视觉 Caption | `analysis/captions_raw.json` | 需 API Key，`--skip-caption` 可跳过 |
+| Step 6 | 四层 JSON 结构化 | `analysis/mv_case_asset.json`, `shot_review.csv` | 整合所有上游结果 |
 
 ---
 
@@ -250,18 +282,21 @@ data/processed/MV_001/
 ├── source/
 │   ├── video.mp4             标准化视频（720p 25fps）
 │   ├── audio.wav             提取的音频
+│   ├── vocals.wav            分离的人声轨（Step 1.5，htdemucs）
+│   ├── bpm.json              BPM 值（Step 1，librosa）
 │   └── metadata.json         视频元信息（时长、分辨率等）
 ├── clips/
 │   └── MV_001_S001.mp4       各镜头视频片段
 ├── frames/
 │   └── MV_001_S001_F001.jpg  关键帧（每镜头开始/中间/结尾各 1 张）
 └── analysis/
-    ├── scenes_raw.json           镜头切分结果（Step 2）
-    ├── keyframes_raw.json        关键帧索引（Step 3）
-    ├── music_structure_raw.json  音乐段落结构（Step 4）
-    ├── captions_raw.json         视觉 Caption（Step 5）
-    ├── mv_case_asset.json        四层资产 JSON（Step 6）
-    └── shot_review.csv           人工复核表（Step 6）
+    ├── scenes_raw.json               镜头切分结果（Step 2）
+    ├── vocal_annotation_raw.json     每镜头人声标注（Step 2.5）
+    ├── keyframes_raw.json            关键帧索引 + 颜色调性（Step 3/3.5）
+    ├── music_structure_raw.json      音乐段落结构（Step 4）
+    ├── captions_raw.json             视觉 Caption（Step 5）
+    ├── mv_case_asset.json            四层资产 JSON（Step 6）
+    └── shot_review.csv               人工复核表（Step 6）
 ```
 
 ### music_structure_raw.json 格式
@@ -287,6 +322,37 @@ data/processed/MV_001/
 ---
 
 ## 常见问题
+
+### Step 1.5 失败：demucs 未安装
+
+```
+demucs: command not found
+```
+
+安装 demucs：
+
+```bash
+pip install demucs
+```
+
+或使用 `--skip-demix` 跳过音源分离（`has_vocals` 字段将为 `null`）。
+
+### Step 2.5 失败：vocals.wav 不存在
+
+Step 1.5 未运行或运行失败，先确保 `source/vocals.wav` 存在：
+
+```bash
+# 检查文件是否存在
+ls data/processed/MV_001/source/vocals.wav
+```
+
+若已有手动分离的 `vocals.wav`，直接复制到 `source/` 目录即可：
+
+```bash
+cp demix/htdemucs/audio/vocals.wav data/processed/MV_001/source/vocals.wav
+```
+
+---
 
 ### Step 4 失败：ckpts 文件缺失
 
